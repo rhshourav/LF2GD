@@ -1,0 +1,9 @@
+{
+  "author": "rhshourav",
+  "github": "https://github.com/rhshourav",
+  "base_url": "https://raw.githubusercontent.com/rhshourav/ideal-fishstick/refs/heads/main/SystemPE-Test",
+  "download_path": "./downloads",
+  "threads": 8,
+  "retry_count": 5,
+  "total_parts": 113
+}
