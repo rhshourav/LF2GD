@@ -1,6 +1,9 @@
 package main
 
 import (
+	"bufio"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -22,6 +25,8 @@ var (
 	totalDownloaded int64
 	completedFiles  int64
 	isJoining       bool
+	isVerifying     bool
+	verifyResult    string
 )
 
 type Config struct {
@@ -107,6 +112,61 @@ func downloadFile(cfg Config, name string) error {
 	return nil
 }
 
+func verifyFiles(cfg Config, files []string) {
+	isVerifying = true
+	defer func() { isVerifying = false }()
+
+	url := cfg.BaseURL + "/HASH"
+	resp, err := http.Get(url)
+	if err != nil || resp.StatusCode != 200 {
+		verifyResult = "Sorry, could not verify (HASH file not found on server)."
+		return
+	}
+	defer resp.Body.Close()
+
+	// Parse the HASH file into a map
+	hashes := make(map[string]string)
+	scanner := bufio.NewScanner(resp.Body)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		parts := strings.Fields(line)
+		if len(parts) >= 2 {
+			hashes[parts[0]] = parts[1] // filename -> hash
+		}
+	}
+
+	// Verify downloaded files against the map
+	for _, name := range files {
+		expectedHash, exists := hashes[name]
+		if !exists {
+			continue // Skip if the file isn't listed in the HASH file
+		}
+
+		path := filepath.Join(cfg.DownloadPath, name)
+		f, err := os.Open(path)
+		if err != nil {
+			verifyResult = fmt.Sprintf("Verification failed: Could not read %s", name)
+			return
+		}
+
+		h := sha256.New()
+		if _, err := io.Copy(h, f); err != nil {
+			f.Close()
+			verifyResult = fmt.Sprintf("Verification failed: Error hashing %s", name)
+			return
+		}
+		f.Close()
+
+		actualHash := hex.EncodeToString(h.Sum(nil))
+		if actualHash != expectedHash {
+			verifyResult = fmt.Sprintf("Verification failed: SHA-256 mismatch on %s", name)
+			return
+		}
+	}
+
+	verifyResult = "Verification successful! All files match SHA-256 hashes."
+}
+
 func joinFiles(cfg Config) error {
 	isJoining = true
 	finalPath := filepath.Join(cfg.DownloadPath, "SystemPE_Full.exe")
@@ -154,10 +214,16 @@ func startWorkflow(cfg Config, p *tea.Program) {
 		jobs <- f
 	}
 	close(jobs)
-	wg.Wait()
+	wg.Wait() // Wait for all downloads to finish
 
-	// All files downloaded, start joining
-	joinFiles(cfg)
+	// Step 2: Verify Files
+	verifyFiles(cfg, files)
+
+	// Step 3: Join Files (Only if verification didn't explicitly fail due to a mismatch)
+	if !strings.Contains(verifyResult, "Verification failed:") {
+		joinFiles(cfg)
+	}
+
 	p.Quit()
 }
 
@@ -177,7 +243,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case time.Time:
 		curr := atomic.LoadInt64(&totalDownloaded)
-		// Speed in MB/s (calculated every 500ms, so multiply by 2)
 		m.speed = float64(curr-m.lastByte) * 2 / 1024 / 1024
 		m.lastByte = curr
 		return m, tick()
@@ -190,13 +255,15 @@ func (m model) View() string {
 	doneCount := atomic.LoadInt64(&completedFiles)
 
 	status := "Downloading..."
-	if isJoining {
+	if isVerifying {
+		status = "Verifying SHA-256 Hashes... Please wait."
+	} else if isJoining {
 		status = "Merging Files... Please wait."
 	}
 
 	info := fmt.Sprintf(
 		"%s\nStatus: %s\nFiles:  %d/%d\nSpeed:  %.2f MB/s\nTotal:  %.2f MB",
-		titleStyle.Render("SystemPE Downloader"),
+		titleStyle.Render("Large File From Github Downloader(LF2GD)"),
 		status,
 		doneCount,
 		m.total,
@@ -217,13 +284,19 @@ func main() {
 
 	p := tea.NewProgram(m)
 
-	// Run download logic in background
 	go startWorkflow(cfg, p)
 
 	if _, err := p.Run(); err != nil {
-		fmt.Printf("Error: %v", err)
+		fmt.Printf("Error: %v\n", err)
 		os.Exit(1)
 	}
 
-	fmt.Println("\nSuccess! Final file created in:", cfg.DownloadPath)
+	// Print final results
+	fmt.Println("\n--- Tasks Complete ---")
+	fmt.Println(verifyResult)
+	if !strings.Contains(verifyResult, "Verification failed:") {
+		fmt.Println("Success! Final file created in:", cfg.DownloadPath)
+	} else {
+		fmt.Println("Process aborted due to file corruption.")
+	}
 }
