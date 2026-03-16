@@ -99,20 +99,23 @@ build/
 
 # Configuration
 
-All configuration is located inside `loadConfig()` in **main.go**.
+All configuration is located inside `loadConfig()` in **main.go**. And change the ```FILE_NAME``` and ```NUMBER_OF_PARTS```
 
 Example:
 
 ```go
 func loadConfig() Config {
 	return Config{
-		BaseURL: "https://example.com/files",
-		DownloadPath: "./downloads",
-		Threads: 4,
-		RetryCount: 5,
-		TotalParts: 179,
+		Author:          "rhshourav",
+		Github:          "https://github.com/rhshourav",
+		BaseURL:         "https://raw.githubusercontent.com/rhshourav/ideal-fishstick/refs/heads/main/FOLDER_NAME",
+		DownloadPath:    "./downloads",
+		Threads:         4,
+		RetryCount:      5,
+		TotalParts:      "NUMBER_OF_PARTS",
 		SegmentsPerFile: 4,
-		MaxConnections: 24,
+		MaxConnections:  24,
+		MovingAvgWindow: 12,
 	}
 }
 ```
@@ -131,16 +134,21 @@ Example:
 
 ```go
 func generateFiles(cfg Config) []string {
-	files := []string{"file.part001.exe"}
-
+	files := []string{"FILE_NAME.part001.exe"}
 	for i := 2; i <= cfg.TotalParts; i++ {
-		files = append(files, fmt.Sprintf("file.part%03d.rar", i))
+		files = append(files, fmt.Sprintf("FILE_NAME.part%03d.rar", i))
 	}
-
 	return files
 }
 ```
+also
+```go
+info := fmt.Sprintf("%s\nStatus: %s %s\nFiles:  %d/%d\nSpeed:  %.2f MB/s",
+		titleStyle.Render("FILE_NAME Downloader (LF2GD)"), status, spinner, done, m.total, m.speed)
 
+	bar := m.progress.ViewAs(float64(done) / float64(m.total))
+
+```
 To download a different file set:
 
 ### Example structure
