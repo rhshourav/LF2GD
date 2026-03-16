@@ -20,11 +20,9 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// Global state tracking
 var (
 	totalDownloaded int64
 	completedFiles  int64
-	isJoining       bool
 	isVerifying     bool
 	verifyResult    string
 	startTime       time.Time
@@ -52,7 +50,6 @@ type model struct {
 	dots     int
 }
 
-// BUILT-IN CONFIGURATION (No config.json required)
 func loadConfig() Config {
 	return Config{
 		Author:       "rhshourav",
@@ -76,7 +73,6 @@ func generateFiles(cfg Config) []string {
 func downloadFile(cfg Config, name string) error {
 	path := filepath.Join(cfg.DownloadPath, name)
 
-	// Properly escape filenames (handles spaces and special characters)
 	escapedName := url.PathEscape(name)
 	downloadURL := cfg.BaseURL + "/" + escapedName
 
@@ -175,26 +171,6 @@ func verifyFiles(cfg Config, files []string) {
 	verifyResult = "Verification successful! All files match SHA-256 hashes."
 }
 
-func joinFiles(cfg Config) error {
-	isJoining = true
-	finalPath := filepath.Join(cfg.DownloadPath, "Willcom_E4_Full.exe")
-	out, err := os.Create(finalPath)
-	if err != nil {
-		return err
-	}
-	defer out.Close()
-
-	for _, name := range generateFiles(cfg) {
-		in, err := os.Open(filepath.Join(cfg.DownloadPath, name))
-		if err != nil {
-			return err
-		}
-		io.Copy(out, in)
-		in.Close()
-	}
-	return nil
-}
-
 func startWorkflow(cfg Config, p *tea.Program) {
 	startTime = time.Now()
 	os.MkdirAll(cfg.DownloadPath, 0755)
@@ -224,9 +200,6 @@ func startWorkflow(cfg Config, p *tea.Program) {
 	wg.Wait()
 
 	verifyFiles(cfg, files)
-	if !strings.Contains(verifyResult, "failed") {
-		joinFiles(cfg)
-	}
 
 	endTime = time.Now()
 	finished = true
@@ -256,7 +229,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tick()
 	}
 	if _, ok := msg.(finishedMsg); ok {
-		// force a final tick so view updates with final numbers
 		return m, nil
 	}
 	return m, nil
@@ -268,8 +240,6 @@ func (m model) View() string {
 	status := "Downloading"
 	if isVerifying {
 		status = "Verifying Hashes"
-	} else if isJoining {
-		status = "Merging Files"
 	}
 
 	dots := strings.Repeat(".", m.dots)
@@ -292,7 +262,7 @@ func (m model) View() string {
 
 		summary := fmt.Sprintf("\n--- Summary ---\nTime elapsed: %s\nTotal downloaded: %.2f MB\nAverage speed: %.2f MB/s\nPeak speed: %.2f MB/s\nFiles completed: %d/%d\nVerification: %s\n\nPress any key to exit.", formatDuration(dur), totalMB, avg, p, done, m.total, verifyResult)
 
-		return fmt.Sprintf("\n%s\n\n%s\n%s\n%s", info, bar, summary, "")
+		return fmt.Sprintf("\n%s\n\n%s\n%s", info, bar, summary)
 	}
 
 	return fmt.Sprintf("\n%s\n\n%s\n", info, bar)
