@@ -99,7 +99,7 @@ build/
 
 # Configuration
 
-All configuration is located inside `loadConfig()` in **main.go**. And change the ```FILE_NAME``` and ```NUMBER_OF_PARTS```
+All configuration is located inside `loadConfig()` in **main.go**. And change the ```FILE_NAME```, ```NUMBER_OF_PARTS``` and ```FOLDER_NAME``` .
 
 Example:
 
